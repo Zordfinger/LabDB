@@ -272,7 +272,7 @@ create table visit_diagnosis (
    visit_id             bigint               not null,
    diagnosis_id         bigint               not null,
    is_primary           boolean              not null,
-   constraint PK_VISIT_DIAGNOSIS primary key (visit_id, diagnosis_id)
+   constraint PK_VISIT_DIAGNOSIS primary key (visit_id)
 );
 
 /*==============================================================*/
@@ -361,4 +361,5 @@ alter table visit_diagnosis
    add constraint FK_VISIT_DI_REFERENCE_DIAGNOSI foreign key (diagnosis_id)
       references diagnosis (diagnosis_id)
       on delete restrict on update restrict;
+
 
