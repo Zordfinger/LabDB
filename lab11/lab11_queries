@@ -1,0 +1,146 @@
+-- 1. Подзапрос в SELECT (связанный): количество диагнозов для каждого визита.
+SELECT v.visit_id,
+       v.visited_at,
+       vt.name AS visit_type,
+       (SELECT COUNT(*)
+        FROM visit_diagnosis AS vd
+        WHERE vd.visit_id = v.visit_id) AS diagnosis_count
+FROM visit AS v
+JOIN visit_type AS vt ON vt.visit_type_id = v.visit_type_id
+ORDER BY v.visited_at DESC;
+
+-- 2. Подзапрос в FROM: сначала собираем диагнозы по визитам,
+-- затем соединяем полученный набор с визитами и типами.
+SELECT v.visit_id,
+       v.visited_at,
+       vt.name AS visit_type,
+       dx.diagnoses
+FROM (
+    SELECT vd.visit_id,
+           string_agg(d.icd10_code || ' — ' || d.name ||
+                      CASE WHEN vd.is_primary THEN ' (основной)' ELSE '' END,
+                      '; ' ORDER BY vd.is_primary DESC, d.icd10_code) AS diagnoses
+    FROM visit_diagnosis AS vd
+    JOIN diagnosis AS d ON d.diagnosis_id = vd.diagnosis_id
+    GROUP BY vd.visit_id
+) AS dx
+JOIN visit AS v ON v.visit_id = dx.visit_id
+JOIN visit_type AS vt ON vt.visit_type_id = v.visit_type_id
+ORDER BY v.visited_at DESC;
+
+-- 3. Подзапрос в WHERE: визиты ровно с двумя диагнозами.
+SELECT v.visit_id,
+       v.visited_at,
+       v.complaint
+FROM visit AS v
+WHERE 2 = (
+    SELECT COUNT(*)
+    FROM visit_diagnosis AS vd
+    WHERE vd.visit_id = v.visit_id
+)
+ORDER BY v.visited_at DESC;
+
+-- 4. Связанные EXISTS: визиты, где одновременно указаны оба диагноза.
+SELECT v.visit_id,
+       v.visited_at,
+       v.complaint
+FROM visit AS v
+WHERE EXISTS (
+    SELECT 1
+    FROM visit_diagnosis AS vd
+    JOIN diagnosis AS d ON d.diagnosis_id = vd.diagnosis_id
+    WHERE vd.visit_id = v.visit_id
+      AND d.icd10_code = 'J20.9'
+)
+AND EXISTS (
+    SELECT 1
+    FROM visit_diagnosis AS vd
+    JOIN diagnosis AS d ON d.diagnosis_id = vd.diagnosis_id
+    WHERE vd.visit_id = v.visit_id
+      AND d.icd10_code = 'J06.9'
+)
+ORDER BY v.visited_at DESC;
+
+-- 5. Связанный NOT EXISTS: пациенты, у которых нет запланированного приёма.
+SELECT p.patient_id, p.last_name, p.first_name
+FROM patient AS p
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM medical_card AS mc
+    JOIN appeal AS a ON a.medical_card_id = mc.medical_card_id
+    JOIN appointment AS ap ON ap.appeal_id = a.appeal_id
+    WHERE mc.patient_id = p.patient_id
+      AND ap.status_id = 1
+)
+ORDER BY p.last_name, p.first_name;
+
+-- 6. Несвязанный NOT IN: тот же поиск без корреляции с внешней строкой.
+SELECT p.patient_id, p.last_name, p.first_name
+FROM patient AS p
+WHERE p.patient_id NOT IN (
+    SELECT mc.patient_id
+    FROM medical_card AS mc
+    JOIN appeal AS a ON a.medical_card_id = mc.medical_card_id
+    JOIN appointment AS ap ON ap.appeal_id = a.appeal_id
+    WHERE ap.status_id = 1
+)
+ORDER BY p.last_name, p.first_name;
+
+-- 7. Вложенный подзапрос: число визитов каждого врача среди трёх самых новых визитов.
+SELECT ms.staff_id,
+       ms.last_name,
+       ms.first_name,
+       (SELECT COUNT(*)
+        FROM visit AS v
+        JOIN appeal AS a ON a.appeal_id = v.appeal_id
+        WHERE a.staff_id = ms.staff_id
+          AND v.visit_id IN (
+              SELECT v_top.visit_id
+              FROM visit AS v_top
+              ORDER BY v_top.visited_at DESC
+              LIMIT 3
+          )) AS recent_visit_count
+FROM medical_staff AS ms
+ORDER BY recent_visit_count DESC, ms.last_name, ms.first_name
+LIMIT 10;
+
+-- 8. Решение задачи 7 через JOIN и GROUP BY.
+WITH latest_visits AS (
+    SELECT v.visit_id, a.staff_id
+    FROM visit AS v
+    JOIN appeal AS a ON a.appeal_id = v.appeal_id
+    ORDER BY v.visited_at DESC
+    LIMIT 3
+), visit_counts AS (
+    SELECT staff_id, COUNT(*) AS recent_visit_count
+    FROM latest_visits
+    GROUP BY staff_id
+)
+SELECT ms.staff_id,
+       ms.last_name,
+       ms.first_name,
+       COALESCE(vc.recent_visit_count, 0) AS recent_visit_count
+FROM medical_staff AS ms
+LEFT JOIN visit_counts AS vc ON vc.staff_id = ms.staff_id
+ORDER BY recent_visit_count DESC, ms.last_name, ms.first_name
+LIMIT 10;
+
+-- 9. Связанный подзапрос: количество услуг для каждого отделения.
+SELECT d.department_id,
+       d.name AS department,
+       (SELECT COUNT(*)
+        FROM medical_service AS s
+        WHERE s.department_id = d.department_id) AS service_count
+FROM department AS d
+ORDER BY service_count DESC, d.name
+LIMIT 10;
+
+-- 10. Та же задача через JOIN и GROUP BY.
+SELECT d.department_id,
+       d.name AS department,
+       COUNT(s.service_id) AS service_count
+FROM department AS d
+LEFT JOIN medical_service AS s ON s.department_id = d.department_id
+GROUP BY d.department_id, d.name
+ORDER BY service_count DESC, d.name
+LIMIT 10;
