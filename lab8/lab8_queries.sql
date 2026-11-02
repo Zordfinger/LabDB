@@ -1,58 +1,41 @@
--- 1. Все визиты с пациентом, врачом, типом и диагнозами.
--- Сортировка по дате визита по убыванию.
-SELECT
-    v.visit_id,
-    v.visited_at,
-    p.last_name || ' ' || p.first_name AS patient,
-    ms.last_name || ' ' || ms.first_name AS medical_staff,
-    vt.name AS visit_type,
-    v.complaint,
-    COALESCE(
-        string_agg(
-            d.icd10_code || ' — ' || d.name ||
-            CASE WHEN vd.is_primary THEN ' (основной)' ELSE '' END,
-            '; ' ORDER BY vd.is_primary DESC, d.icd10_code
-        ),
-        'Диагноз не указан'
-    ) AS diagnoses
-FROM visit v
-JOIN visit_type vt ON vt.visit_type_id = v.visit_type_id
-LEFT JOIN appeal a ON a.appeal_id = v.appeal_id
-LEFT JOIN medical_card mc ON mc.medical_card_id = a.medical_card_id
-LEFT JOIN patient p ON p.patient_id = mc.patient_id
-LEFT JOIN medical_staff ms ON ms.staff_id = a.staff_id
-LEFT JOIN visit_diagnosis vd ON vd.visit_id = v.visit_id
-LEFT JOIN diagnosis d ON d.diagnosis_id = vd.diagnosis_id
-GROUP BY
-    v.visit_id, v.visited_at,
-    p.last_name, p.first_name,
-    ms.last_name, ms.first_name,
-    vt.name, v.complaint
-ORDER BY v.visited_at DESC;
+-- Запрос 1 
+select
+	first_name || ' ' || middle_name || '' || last_name as sname,
+	career_start_year
+	from medical_staff
+group by sname, career_start_year
+order by career_start_year desc
 
--- 2. Количество визитов каждого типа.
--- Группы отсортированы по числу визитов по убыванию.
-SELECT
-    vt.name AS visit_type,
-    COUNT(v.visit_id) AS visit_count
-FROM visit_type vt
-LEFT JOIN visit v ON v.visit_type_id = vt.visit_type_id
-GROUP BY vt.visit_type_id, vt.name
-ORDER BY visit_count DESC, vt.name;
+-- Запрос 2
+select
+	department_speciality_id,
+    count(department_speciality_id) as dsc
+from
+    public.medical_staff
+group by department_speciality_id
+order by department_speciality_id  desc;
 
--- 3. Записи на приём со значением статуса 1 или 2.
--- В справочнике это «Запланирована» и «Состоялась».
--- Результат отсортирован по дате приёма по убыванию.
-SELECT
-    ap.appointment_id,
-    ap.appointment_at,
-    p.last_name || ' ' || p.first_name AS patient,
-    ast.status_id,
-    ast.name AS appointment_status
-FROM appointment ap
-JOIN appointment_status ast ON ast.status_id = ap.status_id
-JOIN appeal a ON a.appeal_id = ap.appeal_id
-JOIN medical_card mc ON mc.medical_card_id = a.medical_card_id
-JOIN patient p ON p.patient_id = mc.patient_id
-WHERE ap.status_id IN (1, 2)
-ORDER BY ap.appointment_at DESC;
+
+-- Запрос 3
+select
+	first_name,
+	middle_name,
+	last_name,
+	career_start_year
+from medical_staff
+where first_name in ('Елена','Максим')
+and career_start_year > 2008
+order by  first_name asc, career_start_year desc
+limit 5;
+
+-- Запрос 4
+select
+    appeal.staff_id as sti,
+    medical_card_id,
+    first_name,
+    last_name
+from
+    public.appeal
+    left join medical_staff on medical_staff.staff_id = appeal.staff_id
+    where medical_card_id = 1
+    order by sti asc
