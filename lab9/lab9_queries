@@ -1,0 +1,79 @@
+-- Пример 1:получить суммарное количество специалистов по каждой специальности(на примере выборка из 2 таблиц, не придумали как реализовать на нашей бд)
+SELECT
+    specialty.name AS specialty,
+    COUNT(medical_staff.staff_id) AS specialists_count
+FROM medical_staff
+INNER JOIN department_speciality
+    ON medical_staff.department_speciality_id =
+       department_speciality.department_speciality_id
+INNER JOIN specialty
+    ON department_speciality.specialty_id = specialty.specialty_id
+GROUP BY specialty.name
+ORDER BY specialists_count DESC
+LIMIT 10;
+
+-- Пример 2:найти медицинские услуги, для которых в базе данных нет информации о заказах
+SELECT DISTINCT
+    medical_service.name,
+    medical_service.description,
+    medical_service.price
+FROM medical_service
+LEFT JOIN service_order
+    ON medical_service.service_id = service_order.service_id
+INNER JOIN medical_service_status
+    ON medical_service.status_id = medical_service_status.status_id
+WHERE service_order.service_id is not null -- добавил not для работы
+ORDER BY medical_service.name
+LIMIT 10;
+
+-- Пример 3:найти сотрудников, которые работают в клинике, но ещё не имеют зарегистрированных обращений пациентов
+SELECT
+    medical_staff.staff_id,
+    medical_staff.first_name,
+    medical_staff.last_name,
+    medical_staff.middle_name
+FROM medical_staff
+LEFT JOIN appeal
+    ON medical_staff.staff_id = appeal.staff_id
+WHERE appeal.appeal_id is not null -- добавил not для работы
+ORDER BY medical_staff.first_name
+LIMIT 10;
+
+-- Пример 4:найти пациентов, имеющих совпадения по году рождения с другими пациентами
+SELECT DISTINCT
+    F.patient_id,
+    F.first_name,
+    F.last_name,
+    F.middle_name,
+    F.birth_date,
+    EXTRACT(YEAR FROM F.birth_date) AS birth_year
+FROM patient F
+CROSS JOIN patient S
+WHERE
+    EXTRACT(YEAR FROM F.birth_date) =
+    EXTRACT(YEAR FROM S.birth_date)
+    AND F.patient_id <> S.patient_id
+ORDER BY birth_year
+LIMIT 20;
+
+-- Пример 5:получить список медицинских сотрудников и количество пациентов, родившихся в одном году, которых они принимали
+SELECT
+    medical_staff.staff_id,
+    medical_staff.first_name,
+    medical_staff.last_name,
+    EXTRACT(YEAR FROM patient.birth_date) AS birth_year,
+    COUNT(DISTINCT patient.patient_id) AS count_of_patients
+FROM medical_staff
+INNER JOIN appeal
+    ON medical_staff.staff_id = appeal.staff_id
+INNER JOIN medical_card
+    ON appeal.medical_card_id = medical_card.medical_card_id
+INNER JOIN patient
+    ON medical_card.patient_id = patient.patient_id
+GROUP BY
+    medical_staff.staff_id,
+    medical_staff.first_name,
+    medical_staff.last_name,
+    EXTRACT(YEAR FROM patient.birth_date)
+ORDER BY count_of_patients DESC
+LIMIT 10;
